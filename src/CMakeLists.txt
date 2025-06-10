@@ -1,1 +1,2 @@
-add_executable(main main.cpp)
+add_subdirectory(lib)
+add_subdirectory(app)
