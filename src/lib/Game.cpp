@@ -67,7 +67,6 @@ void Game::step() {
 	}
 
 	alive_cells_ = std::move(newAlive);
-
 }
 
 Game::Game(const GameInfo &info)

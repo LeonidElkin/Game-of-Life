@@ -13,7 +13,7 @@ class Game {
 	static constexpr uint8_t default_alpha = 255;
 
 	struct PairHash {
-		std::size_t operator()(const std::pair<int, int>& p) const {
+		std::size_t operator()(const std::pair<int, int> &p) const {
 			return std::hash<int>()(p.first) ^ (std::hash<int>()(p.second) << 1);
 		}
 	};
