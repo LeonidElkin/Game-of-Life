@@ -3,22 +3,16 @@
 #include <SDL.h>
 #include <cmath>
 
-auto Game::worldToScreen(float worldX, float worldY) const {
-	SDL_Rect rect;
+SDL_FRect Game::worldToScreenCell(float worldX, float worldY) const {
 	auto const screenX = (worldX - cam_.x) * cam_.zoom + screen_width_half;
 	auto const screenY = (worldY - cam_.y) * cam_.zoom + screen_height_half;
 
-	rect.x = static_cast<int>(screenX);
-	rect.y = static_cast<int>(screenY);
-	rect.w = static_cast<int>(cell_size * cam_.zoom);
-	rect.h = static_cast<int>(cell_size * cam_.zoom);
-
-	return rect;
+	return {screenX, screenY, cell_size * cam_.zoom, cell_size * cam_.zoom};
 }
 
 void Game::drawGrid() {
-	constexpr uint8_t default_grid_color = 200;
-	constexpr uint8_t default_grid_alpha = 255;
+	constexpr uint8_t default_border_color = 128;
+	constexpr uint8_t default_alive_color = 255;
 
 	auto const left = cam_.x - screen_width_half / cam_.zoom;
 	auto const right = cam_.x + screen_width_half / cam_.zoom;
@@ -30,12 +24,20 @@ void Game::drawGrid() {
 	int const topCell = static_cast<int>(floor(top / cell_size));
 	int const bottomCell = static_cast<int>(ceil(bottom / cell_size));
 
-	SDL_SetRenderDrawColor(renderer_, default_grid_color, default_grid_color, default_grid_color, default_grid_alpha);
+	SDL_SetRenderDrawColor(renderer_, default_border_color, default_border_color, default_border_color, default_alpha);
 
 	for (int itx = leftCell; itx <= rightCell; ++itx) {
 		for (int ity = topCell; ity <= bottomCell; ++ity) {
-			SDL_Rect const rect = worldToScreen(static_cast<float>(itx) * cell_size, static_cast<float>(ity) * cell_size);
-			SDL_RenderDrawRect(renderer_, &rect);
+			auto const rect =
+					worldToScreenCell(static_cast<float>(itx) * cell_size, static_cast<float>(ity) * cell_size);
+			if (alive_cells_.contains(std::make_pair(itx, ity))) {
+				SDL_SetRenderDrawColor(renderer_, default_alive_color, default_alive_color, default_alive_color,
+									   default_alpha);
+				SDL_RenderFillRectF(renderer_, &rect);
+			}
+			SDL_SetRenderDrawColor(renderer_, default_border_color, default_border_color, default_border_color,
+								   default_alpha);
+			SDL_RenderDrawRectF(renderer_, &rect);
 		}
 	}
 }
@@ -52,7 +54,7 @@ Game::~Game() {
 }
 
 void Game::run() {
-	const uint8_t defaultBorderColor = 255;
+	constexpr uint8_t default_background_color = 0;
 	const auto zoomFactorIncrease = 1.1F;
 	const auto zoomFactorDecrease = 0.9F;
 	const auto delay = 16;
@@ -62,31 +64,41 @@ void Game::run() {
 
 	while (running) {
 		while (SDL_PollEvent(&event) != 0) {
-			if (event.type == SDL_QUIT) running = false;
+			switch (event.type) {
+				case SDL_QUIT:
+					running = false;
+					break;
+				case SDL_MOUSEWHEEL:
+					cam_.zoom *= (event.wheel.y > 0) ? zoomFactorIncrease : zoomFactorDecrease;
+					break;
+				case SDL_MOUSEMOTION:
+					if (event.motion.state & SDL_BUTTON_MMASK) {
+						cam_.x -= static_cast<float>(event.motion.xrel) / cam_.zoom;
+						cam_.y -= static_cast<float>(event.motion.yrel) / cam_.zoom;
+					}
+					break;
+				case SDL_MOUSEBUTTONDOWN:
+					if (event.button.button == SDL_BUTTON_LEFT) {
+						auto worldX = static_cast<float>(event.button.x - screen_width_half) / cam_.zoom + cam_.x;
+						auto worldY = static_cast<float>(event.button.y - screen_height_half) / cam_.zoom + cam_.y;
+						int const cellX = static_cast<int>(std::floor(worldX / cell_size));
+						int const cellY = static_cast<int>(std::floor(worldY / cell_size));
+						auto const cell = std::make_pair(cellX, cellY);
 
-			if (event.type == SDL_MOUSEWHEEL) {
-				int mouseX{};
-				int mouseY{};
-				SDL_GetMouseState(&mouseX, &mouseY);
-
-				float const beforeZoomX = cam_.x + static_cast<float>(mouseX - screen_width_half) / cam_.zoom;
-				float const beforeZoomY = cam_.y + static_cast<float>(mouseY - screen_height_half) / cam_.zoom;
-				float const afterZoomX = cam_.x + static_cast<float>(mouseX - screen_width_half) / cam_.zoom;
-				float const afterZoomY = cam_.y + static_cast<float>(mouseY - screen_height_half) / cam_.zoom;
-
-				cam_.zoom *= (event.wheel.y > 0) ? zoomFactorIncrease : zoomFactorDecrease;
-				cam_.x += (beforeZoomX - afterZoomX);
-				cam_.y += (beforeZoomY - afterZoomY);
-			}
-
-			if (event.type == SDL_MOUSEMOTION && ((event.motion.state & SDL_BUTTON_LMASK) != 0U)) {
-				cam_.x -= static_cast<float>(event.motion.xrel) / cam_.zoom;
-				cam_.y -= static_cast<float>(event.motion.yrel) / cam_.zoom;
+						if (alive_cells_.contains(cell)) {
+							alive_cells_.erase(cell);
+						} else {
+							alive_cells_.insert(cell);
+						}
+					}
+					break;
+				default:
+					break;
 			}
 		}
 
-		SDL_SetRenderDrawColor(renderer_, defaultBorderColor, defaultBorderColor, defaultBorderColor,
-							   defaultBorderColor);
+		SDL_SetRenderDrawColor(renderer_, default_background_color, default_background_color, default_background_color,
+							   default_alpha);
 		SDL_RenderClear(renderer_);
 
 		drawGrid();

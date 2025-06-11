@@ -13,7 +13,8 @@ Checks: >
   -cppcoreguidelines-owning-memory,
   -modernize-use-trailing-return-type,
   -clang-diagnostic-precedence,
-  -readability-math-missing-parentheses
+  -readability-math-missing-parentheses,
+  -cppcoreguidelines-implicit-bool-conversion
 
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*'
