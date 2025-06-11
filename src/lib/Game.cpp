@@ -1,23 +1,25 @@
 #include "Game.hpp"
 #include "utils.hpp"
 #include <SDL.h>
+#include <array>
 #include <cmath>
+#include <unordered_map>
 
 SDL_FRect Game::worldToScreenCell(float worldX, float worldY) const {
-	auto const screenX = (worldX - cam_.x) * cam_.zoom + screen_width_half;
-	auto const screenY = (worldY - cam_.y) * cam_.zoom + screen_height_half;
+	auto const screenX = (worldX - cam_.x) * cam_.zoom + screenWidthHalf_;
+	auto const screenY = (worldY - cam_.y) * cam_.zoom + screenHeightHalf_;
 
 	return {screenX, screenY, cell_size * cam_.zoom, cell_size * cam_.zoom};
 }
 
 void Game::drawGrid() {
-	constexpr uint8_t default_border_color = 128;
-	constexpr uint8_t default_alive_color = 255;
+	constexpr Uint8 default_border_color = 128;
+	constexpr Uint8 default_alive_color = 255;
 
-	auto const left = cam_.x - screen_width_half / cam_.zoom;
-	auto const right = cam_.x + screen_width_half / cam_.zoom;
-	auto const top = cam_.y - screen_height_half / cam_.zoom;
-	auto const bottom = cam_.y + screen_height_half / cam_.zoom;
+	auto const left = cam_.x - screenWidthHalf_ / cam_.zoom;
+	auto const right = cam_.x + screenWidthHalf_ / cam_.zoom;
+	auto const top = cam_.y - screenHeightHalf_ / cam_.zoom;
+	auto const bottom = cam_.y + screenHeightHalf_ / cam_.zoom;
 
 	int const leftCell = static_cast<int>(floor(left / cell_size));
 	int const rightCell = static_cast<int>(ceil(right / cell_size));
@@ -42,10 +44,36 @@ void Game::drawGrid() {
 	}
 }
 
+void Game::step() {
+	std::array<int, 3> const delta = {-1, 1, 0};
+	std::unordered_map<std::pair<int, int>, int, PairHash> neighborCount;
+
+
+	for (const auto &alive: alive_cells_) {
+		auto const &[aliveX, aliveY] = alive;
+		for (auto deltaX: delta) {
+			for (auto deltaY: delta) {
+				if (deltaX == deltaY && deltaX == 0) continue;
+				neighborCount[{aliveX + deltaX, aliveY + deltaY}]++;
+			}
+		}
+	}
+
+
+	std::unordered_set<std::pair<int, int>, PairHash> newAlive;
+
+	for (auto &[cell, count]: neighborCount) {
+		if (count == 3 || (count == 2 && alive_cells_.contains(cell))) { newAlive.insert(cell); }
+	}
+
+	alive_cells_ = std::move(newAlive);
+
+}
+
 Game::Game(const GameInfo &info)
 	: info_(info), cam_(Camera()),
-	  window_(SDL_CreateWindow("Game of Life", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, screen_width,
-							   screen_height, SDL_WINDOW_SHOWN)),
+	  window_(SDL_CreateWindow("Game of Life", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, screenWidth_,
+							   screenHeight_, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE)),
 	  renderer_(SDL_CreateRenderer(window_, -1, SDL_RENDERER_ACCELERATED)) {}
 
 Game::~Game() {
@@ -54,13 +82,15 @@ Game::~Game() {
 }
 
 void Game::run() {
-	constexpr uint8_t default_background_color = 0;
+	constexpr Uint8 default_background_color = 0;
+	constexpr Uint32 render_delay = 16;
 	const auto zoomFactorIncrease = 1.1F;
 	const auto zoomFactorDecrease = 0.9F;
-	const auto delay = 16;
 
 	bool running = true;
+	bool pause = true;
 	SDL_Event event;
+	Uint32 lastLogicTick = SDL_GetTicks();
 
 	while (running) {
 		while (SDL_PollEvent(&event) != 0) {
@@ -79,8 +109,8 @@ void Game::run() {
 					break;
 				case SDL_MOUSEBUTTONDOWN:
 					if (event.button.button == SDL_BUTTON_LEFT) {
-						auto worldX = static_cast<float>(event.button.x - screen_width_half) / cam_.zoom + cam_.x;
-						auto worldY = static_cast<float>(event.button.y - screen_height_half) / cam_.zoom + cam_.y;
+						auto worldX = static_cast<float>(event.button.x - screenWidthHalf_) / cam_.zoom + cam_.x;
+						auto worldY = static_cast<float>(event.button.y - screenHeightHalf_) / cam_.zoom + cam_.y;
 						int const cellX = static_cast<int>(std::floor(worldX / cell_size));
 						int const cellY = static_cast<int>(std::floor(worldY / cell_size));
 						auto const cell = std::make_pair(cellX, cellY);
@@ -92,9 +122,25 @@ void Game::run() {
 						}
 					}
 					break;
+				case SDL_KEYDOWN:
+					if (event.key.keysym.sym == SDLK_SPACE) { pause = !pause; }
+				case SDL_WINDOWEVENT:
+					if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+						screenWidth_ = event.window.data1;
+						screenHeight_ = event.window.data2;
+						screenWidthHalf_ = screenWidth_ / 2;
+						screenHeightHalf_ = screenHeight_ / 2;
+					}
+					break;
 				default:
 					break;
 			}
+		}
+
+		Uint32 const currentTick = SDL_GetTicks();
+		if (!pause && currentTick - lastLogicTick >= info_.speed) {
+			step();
+			lastLogicTick = currentTick;
 		}
 
 		SDL_SetRenderDrawColor(renderer_, default_background_color, default_background_color, default_background_color,
@@ -104,6 +150,6 @@ void Game::run() {
 		drawGrid();
 
 		SDL_RenderPresent(renderer_);
-		SDL_Delay(delay);
+		SDL_Delay(render_delay);
 	}
 }

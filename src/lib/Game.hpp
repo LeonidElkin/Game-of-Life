@@ -5,10 +5,10 @@
 #include <unordered_set>
 
 class Game {
-	static constexpr int screen_width = 800;
-	static constexpr int screen_width_half = 400;
-	static constexpr int screen_height = 600;
-	static constexpr int screen_height_half = 300;
+	static constexpr int default_screen_width = 800;
+	static constexpr int default_screen_width_half = 400;
+	static constexpr int default_screen_height = 600;
+	static constexpr int default_screen_height_half = 300;
 	static constexpr float cell_size = 40.0F;
 	static constexpr uint8_t default_alpha = 255;
 
@@ -18,6 +18,10 @@ class Game {
 		}
 	};
 
+	int screenWidth_ = default_screen_width;
+	int screenWidthHalf_ = default_screen_width_half;
+	int screenHeight_ = default_screen_height;
+	int screenHeightHalf_ = default_screen_height_half;
 	GameInfo info_;
 	Camera cam_;
 	SDL_Window *window_;
@@ -27,6 +31,7 @@ class Game {
 	[[nodiscard]] SDL_FRect worldToScreenCell(float worldX, float worldY) const;
 
 	void drawGrid();
+	void step();
 
 public:
 	explicit Game(const GameInfo &info);

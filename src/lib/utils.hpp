@@ -8,15 +8,8 @@ struct Camera {
 	float zoom = 1.0F;
 };
 
-enum class GameType : uint8_t {
-	BorderedGameType,
-	ClosureGameType,
-};
-
 struct GameInfo {
-	uint32_t width;
-	uint32_t height;
-	GameType type;
+	uint32_t speed;
 };
 
 GameInfo parseOptions(int argc, char **argv);
